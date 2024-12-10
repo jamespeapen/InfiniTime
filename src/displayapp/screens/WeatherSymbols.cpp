@@ -59,3 +59,14 @@ const char* Pinetime::Applications::Screens::Symbols::GetCondition(const Pinetim
       return "";
   }
 }
+
+lv_color_t Pinetime::Applications::Screens::Symbols::GetColor(const Pinetime::Controllers::SimpleWeatherService::Temperature temp) {
+    if (temp.Celsius() <= 0) { // freezing
+        return Colors::blue;
+    } else if (temp.Celsius() <= 4) { // ice
+        return LV_COLOR_CYAN;
+    } else if (temp.Celsius() >= 27) { // hot
+        return Colors::deepOrange;
+    }
+    return Colors::orange; // normal
+}
