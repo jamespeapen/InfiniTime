@@ -6,13 +6,14 @@
 #include "displayapp/screens/BleIcon.h"
 #include "displayapp/screens/NotificationIcon.h"
 #include "displayapp/screens/Symbols.h"
+#include "displayapp/screens/WeatherSymbols.h"
 #include "components/battery/BatteryController.h"
 #include "components/ble/BleController.h"
 #include "components/ble/NotificationManager.h"
 #include "components/heartrate/HeartRateController.h"
 #include "components/motion/MotionController.h"
 #include "components/settings/Settings.h"
-#include "displayapp/Colors.h"
+#include "components/ble/SimpleWeatherService.h"
 
 using namespace Pinetime::Applications::Screens;
 
@@ -23,7 +24,8 @@ WatchFaceCasioStyleG7710::WatchFaceCasioStyleG7710(Controllers::DateTime& dateTi
                                                    Controllers::Settings& settingsController,
                                                    Controllers::HeartRateController& heartRateController,
                                                    Controllers::MotionController& motionController,
-                                                   Controllers::FS& filesystem)
+                                                   Controllers::FS& filesystem,
+                                                   Controllers::SimpleWeatherService& weatherService)
   : currentDateTime {{}},
     batteryIcon(true),
     dateTimeController {dateTimeController},
@@ -32,7 +34,8 @@ WatchFaceCasioStyleG7710::WatchFaceCasioStyleG7710(Controllers::DateTime& dateTi
     notificatioManager {notificatioManager},
     settingsController {settingsController},
     heartRateController {heartRateController},
-    motionController {motionController} {
+    motionController {motionController},
+    weatherService {weatherService} {
 
   lfs_file f = {};
   if (filesystem.FileOpen(&f, "/fonts/lv_font_dots_40.bin", LFS_O_RDONLY) >= 0) {
@@ -160,6 +163,17 @@ WatchFaceCasioStyleG7710::WatchFaceCasioStyleG7710(Controllers::DateTime& dateTi
   /*lv_label_set_text_static(heartbeatValue, "");*/
   /*lv_obj_align(heartbeatValue, heartbeatIcon, LV_ALIGN_OUT_RIGHT_MID, 5, 0);*/
 
+  weatherIcon = lv_label_create(lv_scr_act(), nullptr);
+  lv_obj_set_style_local_text_color(weatherIcon, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_color_hex(0x999999));
+  lv_obj_set_style_local_text_font(weatherIcon, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, &fontawesome_weathericons);
+  lv_label_set_text(weatherIcon, "");
+  lv_obj_align(weatherIcon, lv_scr_act(), LV_ALIGN_IN_BOTTOM_LEFT, 5, -2);
+  lv_obj_set_auto_realign(weatherIcon, true);
+
+  temperature = lv_label_create(lv_scr_act(), nullptr);
+  lv_obj_set_style_local_text_color(temperature, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_color_hex(0x999999));
+  lv_label_set_text(temperature, "");
+  lv_obj_align(temperature, weatherIcon, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
 
   stepValue = lv_label_create(lv_scr_act(), nullptr);
   lv_obj_set_style_local_text_color(stepValue, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, color_text);
@@ -313,6 +327,27 @@ void WatchFaceCasioStyleG7710::Refresh() {
     lv_obj_realign(stepValue);
     lv_obj_realign(stepIcon);
   }
+
+  currentWeather = weatherService.Current();
+  if (currentWeather.IsUpdated()) {
+    auto optCurrentWeather = currentWeather.Get();
+    if (optCurrentWeather) {
+      int16_t temp = optCurrentWeather->temperature.Celsius();
+      if (settingsController.GetWeatherFormat() == Controllers::Settings::WeatherFormat::Imperial) {
+        temp = optCurrentWeather->temperature.Fahrenheit();
+      }
+      lv_label_set_text_fmt(temperature, "%d°", temp);
+      lv_label_set_text(weatherIcon, Symbols::GetSymbol(optCurrentWeather->iconId));
+      lv_obj_set_style_local_text_color(weatherIcon, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, Symbols::GetColor(optCurrentWeather->temperature));
+      lv_obj_set_style_local_text_color(temperature, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, Symbols::GetColor(optCurrentWeather->temperature));
+    } else {
+      lv_label_set_text(temperature, "--");
+      lv_label_set_text(weatherIcon, Symbols::ban);
+    }
+    lv_obj_realign(temperature);
+    lv_obj_realign(weatherIcon);
+  }
+
 }
 
 bool WatchFaceCasioStyleG7710::IsAvailable(Pinetime::Controllers::FS& filesystem) {
